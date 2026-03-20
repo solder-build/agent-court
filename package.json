@@ -1,0 +1,18 @@
+{
+  "name": "agent-court",
+  "version": "0.1.0",
+  "private": true,
+  "description": "On-chain dispute resolution for the AI agent economy on Solana",
+  "scripts": {
+    "dev": "cd app && npm run dev",
+    "build:program": "cd programs/agent-court-escrow && anchor build",
+    "test:program": "cd programs/agent-court-escrow && anchor test",
+    "deploy:devnet": "cd programs/agent-court-escrow && anchor deploy --provider.cluster devnet",
+    "judge": "cd agents/judge && npx tsx src/index.ts",
+    "demo": "cd agents && npx tsx demo/run-dispute.ts"
+  },
+  "workspaces": [
+    "app",
+    "agents/judge"
+  ]
+}

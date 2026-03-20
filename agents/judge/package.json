@@ -1,0 +1,25 @@
+{
+  "name": "@solder/agent-court",
+  "version": "0.1.0",
+  "description": "On-chain dispute resolution protocol for AI agent transactions — 3-judge AI tribunal with Cortex MCP evidence gathering",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "demo": "npx tsx src/demo.ts",
+    "trial": "npx tsx src/run-trial.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.30.1",
+    "@google/genai": "^1.0.0",
+    "@solana/spl-token": "^0.4.0",
+    "@solana/web3.js": "^1.98.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "@types/node": "^22.0.0"
+  }
+}

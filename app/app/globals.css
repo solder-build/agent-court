@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --color-court-bg: #020617;
+  --color-court-bench: #0f172a;
+  --color-court-dock: #1e293b;
+  --color-judge-alpha: #60a5fa;
+  --color-judge-beta: #fbbf24;
+  --color-judge-gamma: #a78bfa;
+
+  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  --font-sans: "Inter", system-ui, sans-serif;
+
+  --animate-fade-up: fade-up 0.5s ease-out forwards;
+  --animate-scale-x: scale-x 0.6s ease-out forwards;
+  --animate-glow-pulse: glow-pulse 2s ease-in-out infinite;
+  --animate-verdict-slam: verdict-slam 0.4s ease-out forwards;
+
+  @keyframes fade-up {
+    0% { opacity: 0; transform: translateY(20px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes scale-x {
+    0% { transform: scaleX(0); }
+    100% { transform: scaleX(1); }
+  }
+  @keyframes glow-pulse {
+    0%, 100% { box-shadow: 0 0 15px 0 var(--glow-color, rgba(96, 165, 250, 0.2)); }
+    50% { box-shadow: 0 0 30px 5px var(--glow-color, rgba(96, 165, 250, 0.3)); }
+  }
+  @keyframes verdict-slam {
+    0% { opacity: 0; transform: scale(1.3); }
+    50% { opacity: 1; transform: scale(0.95); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-slate-800;
+  }
+  body {
+    @apply bg-slate-950 text-slate-100;
+  }
+}
