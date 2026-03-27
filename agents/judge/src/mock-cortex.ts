@@ -3,6 +3,9 @@
 // =============================================================================
 // Drop-in replacement for CortexToolExecutor that returns hardcoded data
 // matching the demo scenario in docs/DEMO_SCENARIO.md
+//
+// Also exports MockCovalentToolExecutor — drop-in for CovalentToolExecutor
+// with hardcoded on-chain fixtures for the same demo scenario.
 
 import type { FunctionCall } from "./types.js";
 
@@ -177,6 +180,8 @@ const FIXTURES: Record<string, Record<string, unknown>> = {
     ],
   },
 
+  // Covalent fixtures are in COVALENT_FIXTURES below
+
   // Judge Gamma — Historical anomalies for precedent
   "detect_anomalies:will-eth-etf-approved-may": {
     slug: "will-eth-etf-approved-may",
@@ -187,5 +192,116 @@ const FIXTURES: Record<string, Record<string, unknown>> = {
       { timestamp: "2024-05-16T14:00:00Z", price: 0.35, mean_price: 0.48, z_score: -3.2, deviation_pct: -27.1, direction: "spike_down", outcome_token: "YES" },
       { timestamp: "2024-05-18T22:00:00Z", price: 0.68, mean_price: 0.42, z_score: 5.1, deviation_pct: 61.9, direction: "spike_up", outcome_token: "YES" },
     ],
+  },
+};
+
+// =============================================================================
+// Mock Covalent Tool Executor — "Bad Signal" Demo Fixtures
+// =============================================================================
+// Drop-in replacement for CovalentToolExecutor. Key format:
+//   "tool_name:wallet_address" — wallet-specific fixture
+//   "tool_name"               — generic fallback (unused currently)
+
+export class MockCovalentToolExecutor {
+  async execute(call: FunctionCall): Promise<Record<string, unknown>> {
+    const walletAddress = call.args.wallet_address as string | undefined;
+    const key = walletAddress
+      ? `${call.name}:${walletAddress}`
+      : call.name;
+    console.log(`  [Covalent Mock] ${call.name}(${JSON.stringify(call.args)})`);
+    return (
+      COVALENT_FIXTURES[key] ??
+      COVALENT_FIXTURES[call.name] ?? { error: `No Covalent fixture for: ${key}` }
+    );
+  }
+}
+
+const COVALENT_FIXTURES: Record<string, Record<string, unknown>> = {
+  // --- get_wallet_token_balances ---
+
+  // Plaintiff: 8xFp... had 750 USDC 24h ago, now has 250 — consistent with 500 going to escrow
+  "get_wallet_token_balances:8xFp3nRq7vKm2jLs5tYhW9dC4bE6uA1xZoG8FiN4mQw": {
+    wallet_address: "8xFp3nRq7vKm2jLs5tYhW9dC4bE6uA1xZoG8FiN4mQw",
+    chain_name: "solana-mainnet",
+    items: [
+      {
+        contract_name: "USD Coin",
+        contract_ticker_symbol: "USDC",
+        contract_address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        balance: "250000000",
+        balance_24h: "750000000",
+        quote: 250.00,
+        quote_24h: 750.00,
+      },
+      {
+        contract_name: "Solana",
+        contract_ticker_symbol: "SOL",
+        contract_address: "native",
+        balance: "2500000000",
+        quote: 375.00,
+      },
+    ],
+  },
+
+  // Defendant: 3yGr... — established wallet, $12.4K USDC, not a scammer
+  "get_wallet_token_balances:3yGr8kLs2mTn5vXj7wRq9pBc1dF4hA6zEoU0NiS7kLs": {
+    wallet_address: "3yGr8kLs2mTn5vXj7wRq9pBc1dF4hA6zEoU0NiS7kLs",
+    chain_name: "solana-mainnet",
+    items: [
+      {
+        contract_name: "USD Coin",
+        contract_ticker_symbol: "USDC",
+        contract_address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+        balance: "12400000000",
+        balance_24h: "11900000000",
+        quote: 12400.00,
+        quote_24h: 11900.00,
+      },
+      {
+        contract_name: "Solana",
+        contract_ticker_symbol: "SOL",
+        contract_address: "native",
+        balance: "45000000000",
+        quote: 6750.00,
+      },
+    ],
+  },
+
+  // --- get_token_transfers ---
+
+  // Plaintiff USDC transfers — confirms 500 USDC OUT to escrow at 13:55 UTC, 5 min before signal delivery
+  "get_token_transfers:8xFp3nRq7vKm2jLs5tYhW9dC4bE6uA1xZoG8FiN4mQw": {
+    wallet_address: "8xFp3nRq7vKm2jLs5tYhW9dC4bE6uA1xZoG8FiN4mQw",
+    token_address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    chain_name: "solana-mainnet",
+    items: [
+      {
+        block_signed_at: "2026-03-15T13:55:00Z",
+        tx_hash: "5KtZ...",
+        from_address: "8xFp3nRq7vKm2jLs5tYhW9dC4bE6uA1xZoG8FiN4mQw",
+        to_address: "7xKp4mQw9R2v5nFh3jYbL8dT6wZc1AeS0fGu2HiN4qXr",
+        amount: "500000000",
+        amount_quote: 500.00,
+        transfer_type: "OUT",
+        note: "Escrow deposit — 500 USDC to escrow 7xKp4mQw...N4qXr at 13:55 UTC, 5 minutes before signal delivery at 14:00 UTC",
+      },
+    ],
+  },
+
+  // --- get_wallet_transactions ---
+
+  // Defendant transaction history — 187-day-old wallet, 1842 total transactions
+  "get_wallet_transactions:3yGr8kLs2mTn5vXj7wRq9pBc1dF4hA6zEoU0NiS7kLs": {
+    wallet_address: "3yGr8kLs2mTn5vXj7wRq9pBc1dF4hA6zEoU0NiS7kLs",
+    chain_name: "solana-mainnet",
+    items: [
+      { block_signed_at: "2026-03-15T14:00:00Z", tx_hash: "9Lq...", successful: true, gas_spent: "5000", note: "Signal delivery transaction" },
+      { block_signed_at: "2026-03-14T09:22:00Z", tx_hash: "2Mw...", successful: true, gas_spent: "5000" },
+      { block_signed_at: "2026-03-12T16:45:00Z", tx_hash: "7Bx...", successful: true, gas_spent: "5000" },
+      { block_signed_at: "2026-03-10T11:30:00Z", tx_hash: "4Hy...", successful: true, gas_spent: "5000" },
+      { block_signed_at: "2026-03-08T08:15:00Z", tx_hash: "1Pz...", successful: true, gas_spent: "5000" },
+    ],
+    wallet_age_days: 187,
+    total_transactions: 1842,
   },
 };

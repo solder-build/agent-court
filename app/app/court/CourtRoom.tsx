@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,20 @@ import {
   MOCK_VERDICT,
   MOCK_SETTLEMENT,
 } from "./mock-data";
+import {
+  adaptTrialResult,
+  type AdaptedTrialData,
+  type RealTrialResult,
+} from "./trial-adapter";
+
+const MOCK_ADAPTED: AdaptedTrialData = {
+  caseData: MOCK_CASE,
+  evidence: MOCK_EVIDENCE,
+  crossExamination: MOCK_CROSS_EXAMINATION,
+  deliberations: MOCK_DELIBERATIONS,
+  verdict: MOCK_VERDICT,
+  settlement: MOCK_SETTLEMENT,
+};
 
 import { EvidencePanel } from "./EvidencePanel";
 import { CrossExamination } from "./CrossExamination";
@@ -119,8 +133,8 @@ function PhaseTimeline({
 // ---------------------------------------------------------------------------
 // CaseFiling — Phase 1
 // ---------------------------------------------------------------------------
-function CaseFilingPhase() {
-  const c = MOCK_CASE;
+function CaseFilingPhase({ caseData }: { caseData: AdaptedTrialData["caseData"] }) {
+  const c = caseData;
 
   return (
     <div className="grid grid-cols-5 gap-6">
@@ -247,7 +261,15 @@ function CaseFilingPhase() {
 // ---------------------------------------------------------------------------
 // Evidence Phase — Phase 2
 // ---------------------------------------------------------------------------
-function EvidencePhase({ isActive }: { isActive: boolean }) {
+function EvidencePhase({
+  isActive,
+  evidence,
+  isLive,
+}: {
+  isActive: boolean;
+  evidence: AdaptedTrialData["evidence"];
+  isLive: boolean;
+}) {
   const judgeIds: JudgeId[] = ["alpha", "beta", "gamma"];
 
   return (
@@ -260,7 +282,7 @@ function EvidencePhase({ isActive }: { isActive: boolean }) {
           variant="outline"
           className="bg-sky-500/10 text-sky-400 border-sky-500/30 text-xs"
         >
-          Querying Cortex Prediction Markets
+          {isLive ? "Cortex + Covalent" : "Querying Cortex Prediction Markets"}
         </Badge>
       </div>
       <div className="grid grid-cols-3 gap-4">
@@ -268,7 +290,7 @@ function EvidencePhase({ isActive }: { isActive: boolean }) {
           <EvidencePanel
             key={id}
             judge={JUDGES[id]}
-            evidence={MOCK_EVIDENCE.filter((e) => e.judgeId === id)}
+            evidence={evidence.filter((e) => e.judgeId === id)}
             isActive={isActive}
           />
         ))}
@@ -280,7 +302,13 @@ function EvidencePhase({ isActive }: { isActive: boolean }) {
 // ---------------------------------------------------------------------------
 // Deliberation Phase — Phase 4
 // ---------------------------------------------------------------------------
-function DeliberationPhase({ isActive }: { isActive: boolean }) {
+function DeliberationPhase({
+  isActive,
+  deliberations,
+}: {
+  isActive: boolean;
+  deliberations: AdaptedTrialData["deliberations"];
+}) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 mb-2">
@@ -295,7 +323,7 @@ function DeliberationPhase({ isActive }: { isActive: boolean }) {
         </Badge>
       </div>
       <div className="grid grid-cols-3 gap-4">
-        {MOCK_DELIBERATIONS.map((delib, i) => (
+        {deliberations.map((delib, i) => (
           <JudgePanel
             key={delib.judgeId}
             deliberation={delib}
@@ -311,8 +339,8 @@ function DeliberationPhase({ isActive }: { isActive: boolean }) {
 // ---------------------------------------------------------------------------
 // Settlement Phase — Phase 6
 // ---------------------------------------------------------------------------
-function SettlementPhase() {
-  const s = MOCK_SETTLEMENT;
+function SettlementPhase({ settlement }: { settlement: AdaptedTrialData["settlement"] }) {
+  const s = settlement;
 
   return (
     <div className="flex items-center justify-center min-h-[400px]">
@@ -436,6 +464,21 @@ function SettlementPhase() {
 export default function CourtRoom() {
   const [currentPhase, setCurrentPhase] = useState<TrialPhase>("filing");
   const [phaseHistory, setPhaseHistory] = useState<TrialPhase[]>(["filing"]);
+  const [trialData, setTrialData] = useState<AdaptedTrialData>(MOCK_ADAPTED);
+  const [isLive, setIsLive] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/trial")
+      .then((r) => r.json())
+      .then((raw: RealTrialResult) => {
+        const adapted = adaptTrialResult(raw);
+        setTrialData(adapted);
+        setIsLive(raw.source === "live");
+      })
+      .catch(() => {
+        // silently keep mock data on error
+      });
+  }, []);
 
   const advancePhase = useCallback(() => {
     const currentIndex = PHASES.findIndex((p) => p.id === currentPhase);
@@ -502,8 +545,19 @@ export default function CourtRoom() {
             {/* Case ID */}
             <div className="flex items-center gap-3">
               <span className="text-xs font-mono text-slate-500">
-                {MOCK_CASE.id}
+                {trialData.caseData.id}
               </span>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-xs",
+                  isLive
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                    : "bg-slate-500/10 text-slate-400 border-slate-500/30"
+                )}
+              >
+                {isLive ? "LIVE" : "DEMO"}
+              </Badge>
               <Badge
                 variant="outline"
                 className={cn(
@@ -528,7 +582,7 @@ export default function CourtRoom() {
         {/* Phase 1: Case Filing */}
         {currentPhase === "filing" && (
           <div className="space-y-6">
-            <CaseFilingPhase />
+            <CaseFilingPhase caseData={trialData.caseData} />
             <div className="flex justify-end">
               <Button
                 onClick={advancePhase}
@@ -556,7 +610,7 @@ export default function CourtRoom() {
         {/* Phase 2: Evidence Gathering */}
         {currentPhase === "evidence" && (
           <div className="space-y-6">
-            <EvidencePhase isActive={true} />
+            <EvidencePhase isActive={true} evidence={trialData.evidence} isLive={isLive} />
             <div className="flex justify-end">
               <Button
                 onClick={advancePhase}
@@ -585,7 +639,7 @@ export default function CourtRoom() {
         {currentPhase === "cross-examination" && (
           <div className="space-y-6">
             <CrossExamination
-              messages={MOCK_CROSS_EXAMINATION}
+              messages={trialData.crossExamination}
               isActive={true}
             />
             <div className="flex justify-end">
@@ -615,7 +669,7 @@ export default function CourtRoom() {
         {/* Phase 4: Deliberation */}
         {currentPhase === "deliberation" && (
           <div className="space-y-6">
-            <DeliberationPhase isActive={true} />
+            <DeliberationPhase isActive={true} deliberations={trialData.deliberations} />
             <div className="flex justify-end">
               <Button
                 onClick={advancePhase}
@@ -643,23 +697,23 @@ export default function CourtRoom() {
         {/* Phase 5: Verdict */}
         {currentPhase === "verdict" && (
           <VerdictReveal
-            verdict={MOCK_VERDICT}
+            verdict={trialData.verdict}
             isActive={true}
             onSettle={handleSettle}
           />
         )}
 
         {/* Phase 6: Settlement */}
-        {currentPhase === "settlement" && <SettlementPhase />}
+        {currentPhase === "settlement" && <SettlementPhase settlement={trialData.settlement} />}
       </main>
 
       {/* ===== FOOTER: Escrow Status ===== */}
       <footer className="sticky bottom-0 z-50">
         <EscrowStatus
-          caseData={MOCK_CASE}
+          caseData={trialData.caseData}
           currentPhase={currentPhase}
           settlement={
-            currentPhase === "settlement" ? MOCK_SETTLEMENT : undefined
+            currentPhase === "settlement" ? trialData.settlement : undefined
           }
         />
       </footer>

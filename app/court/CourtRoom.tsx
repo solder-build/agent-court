@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
-import type { TrialPhase, JudgeId } from "./types";
+import type { TrialPhase, JudgeId, CaseData, EvidenceItem, ChatMessage, JudgeDeliberation, Verdict, Settlement } from "./types";
 import { JUDGES } from "./types";
 import {
   MOCK_CASE,
@@ -17,6 +17,8 @@ import {
   MOCK_VERDICT,
   MOCK_SETTLEMENT,
 } from "./mock-data";
+import { adaptTrialResult } from "./trial-adapter";
+import type { RealTrialResult } from "./trial-adapter";
 
 import { EvidencePanel } from "./EvidencePanel";
 import { CrossExamination } from "./CrossExamination";
@@ -119,8 +121,8 @@ function PhaseTimeline({
 // ---------------------------------------------------------------------------
 // CaseFiling — Phase 1
 // ---------------------------------------------------------------------------
-function CaseFilingPhase() {
-  const c = MOCK_CASE;
+function CaseFilingPhase({ caseData }: { caseData: CaseData }) {
+  const c = caseData;
 
   return (
     <div className="grid grid-cols-5 gap-6">
@@ -247,7 +249,7 @@ function CaseFilingPhase() {
 // ---------------------------------------------------------------------------
 // Evidence Phase — Phase 2
 // ---------------------------------------------------------------------------
-function EvidencePhase({ isActive }: { isActive: boolean }) {
+function EvidencePhase({ isActive, evidence }: { isActive: boolean; evidence: EvidenceItem[] }) {
   const judgeIds: JudgeId[] = ["alpha", "beta", "gamma"];
 
   return (
@@ -268,7 +270,7 @@ function EvidencePhase({ isActive }: { isActive: boolean }) {
           <EvidencePanel
             key={id}
             judge={JUDGES[id]}
-            evidence={MOCK_EVIDENCE.filter((e) => e.judgeId === id)}
+            evidence={evidence.filter((e) => e.judgeId === id)}
             isActive={isActive}
           />
         ))}
@@ -280,7 +282,7 @@ function EvidencePhase({ isActive }: { isActive: boolean }) {
 // ---------------------------------------------------------------------------
 // Deliberation Phase — Phase 4
 // ---------------------------------------------------------------------------
-function DeliberationPhase({ isActive }: { isActive: boolean }) {
+function DeliberationPhase({ isActive, deliberations }: { isActive: boolean; deliberations: JudgeDeliberation[] }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 mb-2">
@@ -295,7 +297,7 @@ function DeliberationPhase({ isActive }: { isActive: boolean }) {
         </Badge>
       </div>
       <div className="grid grid-cols-3 gap-4">
-        {MOCK_DELIBERATIONS.map((delib, i) => (
+        {deliberations.map((delib, i) => (
           <JudgePanel
             key={delib.judgeId}
             deliberation={delib}
@@ -311,8 +313,8 @@ function DeliberationPhase({ isActive }: { isActive: boolean }) {
 // ---------------------------------------------------------------------------
 // Settlement Phase — Phase 6
 // ---------------------------------------------------------------------------
-function SettlementPhase() {
-  const s = MOCK_SETTLEMENT;
+function SettlementPhase({ settlement }: { settlement: Settlement }) {
+  const s = settlement;
 
   return (
     <div className="flex items-center justify-center min-h-[400px]">
@@ -437,6 +439,32 @@ export default function CourtRoom() {
   const [currentPhase, setCurrentPhase] = useState<TrialPhase>("filing");
   const [phaseHistory, setPhaseHistory] = useState<TrialPhase[]>(["filing"]);
 
+  // Trial data — populated from API on mount, falls back to mock constants
+  const [trialCase, setTrialCase] = useState<CaseData>(MOCK_CASE);
+  const [trialEvidence, setTrialEvidence] = useState<EvidenceItem[]>(MOCK_EVIDENCE);
+  const [trialCrossExam, setTrialCrossExam] = useState<ChatMessage[]>(MOCK_CROSS_EXAMINATION);
+  const [trialDeliberations, setTrialDeliberations] = useState<JudgeDeliberation[]>(MOCK_DELIBERATIONS);
+  const [trialVerdict, setTrialVerdict] = useState<Verdict>(MOCK_VERDICT);
+  const [trialSettlement, setTrialSettlement] = useState<Settlement>(MOCK_SETTLEMENT);
+
+  useEffect(() => {
+    fetch("/api/trial")
+      .then((res) => res.json())
+      .then((raw: RealTrialResult) => {
+        if (raw.source !== "live") return; // keep mock state
+        const adapted = adaptTrialResult(raw);
+        setTrialCase(adapted.caseData);
+        setTrialEvidence(adapted.evidence);
+        setTrialCrossExam(adapted.crossExamination);
+        setTrialDeliberations(adapted.deliberations);
+        setTrialVerdict(adapted.verdict);
+        setTrialSettlement(adapted.settlement);
+      })
+      .catch(() => {
+        // Network error — mock state already set, nothing to do
+      });
+  }, []);
+
   const advancePhase = useCallback(() => {
     const currentIndex = PHASES.findIndex((p) => p.id === currentPhase);
     if (currentIndex < PHASES.length - 1) {
@@ -502,7 +530,7 @@ export default function CourtRoom() {
             {/* Case ID */}
             <div className="flex items-center gap-3">
               <span className="text-xs font-mono text-slate-500">
-                {MOCK_CASE.id}
+                {trialCase.id}
               </span>
               <Badge
                 variant="outline"
@@ -528,7 +556,7 @@ export default function CourtRoom() {
         {/* Phase 1: Case Filing */}
         {currentPhase === "filing" && (
           <div className="space-y-6">
-            <CaseFilingPhase />
+            <CaseFilingPhase caseData={trialCase} />
             <div className="flex justify-end">
               <Button
                 onClick={advancePhase}
@@ -556,7 +584,7 @@ export default function CourtRoom() {
         {/* Phase 2: Evidence Gathering */}
         {currentPhase === "evidence" && (
           <div className="space-y-6">
-            <EvidencePhase isActive={true} />
+            <EvidencePhase isActive={true} evidence={trialEvidence} />
             <div className="flex justify-end">
               <Button
                 onClick={advancePhase}
@@ -585,7 +613,7 @@ export default function CourtRoom() {
         {currentPhase === "cross-examination" && (
           <div className="space-y-6">
             <CrossExamination
-              messages={MOCK_CROSS_EXAMINATION}
+              messages={trialCrossExam}
               isActive={true}
             />
             <div className="flex justify-end">
@@ -615,7 +643,7 @@ export default function CourtRoom() {
         {/* Phase 4: Deliberation */}
         {currentPhase === "deliberation" && (
           <div className="space-y-6">
-            <DeliberationPhase isActive={true} />
+            <DeliberationPhase isActive={true} deliberations={trialDeliberations} />
             <div className="flex justify-end">
               <Button
                 onClick={advancePhase}
@@ -643,23 +671,23 @@ export default function CourtRoom() {
         {/* Phase 5: Verdict */}
         {currentPhase === "verdict" && (
           <VerdictReveal
-            verdict={MOCK_VERDICT}
+            verdict={trialVerdict}
             isActive={true}
             onSettle={handleSettle}
           />
         )}
 
         {/* Phase 6: Settlement */}
-        {currentPhase === "settlement" && <SettlementPhase />}
+        {currentPhase === "settlement" && <SettlementPhase settlement={trialSettlement} />}
       </main>
 
       {/* ===== FOOTER: Escrow Status ===== */}
       <footer className="sticky bottom-0 z-50">
         <EscrowStatus
-          caseData={MOCK_CASE}
+          caseData={trialCase}
           currentPhase={currentPhase}
           settlement={
-            currentPhase === "settlement" ? MOCK_SETTLEMENT : undefined
+            currentPhase === "settlement" ? trialSettlement : undefined
           }
         />
       </footer>

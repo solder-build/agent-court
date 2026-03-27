@@ -4,12 +4,13 @@
 //
 // Each JudgeAgent wraps a Gemini conversation with function calling enabled.
 // It manages the multi-turn conversation: evidence review -> cross-examination
-// rounds -> verdict. Cortex tool calls are intercepted and routed to the
-// CortexToolExecutor.
+// rounds -> verdict. Cortex and Covalent tool calls are intercepted and routed
+// to their respective executors.
 // =============================================================================
 
 import { GoogleGenAI, type Content, type Part, type Tool } from "@google/genai";
 import { CORTEX_TOOL_DECLARATIONS, CortexToolExecutor } from "./cortex-tools.js";
+import { COVALENT_TOOL_DECLARATIONS, CovalentToolExecutor, isCovalentTool } from "./covalent-tools.js";
 import {
   buildEvidenceReviewPrompt,
   buildFollowUpPrompt,
@@ -25,7 +26,7 @@ import type {
 
 // --- Constants ---
 
-const MAX_TOOL_CALL_ROUNDS = 5; // Max Cortex tool calls per turn before forcing text
+const MAX_TOOL_CALL_ROUNDS = 5; // Max tool calls per turn before forcing text
 const MAX_CROSS_EXAM_ROUNDS = 3;
 
 // --- Judge Agent ---
@@ -34,6 +35,7 @@ export class JudgeAgent {
   private config: JudgeConfig;
   private genai: GoogleGenAI;
   private cortex: CortexToolExecutor;
+  private covalent?: CovalentToolExecutor;
   private conversationHistory: Content[] = [];
   private toolCallLog: Array<{ call: FunctionCall; result: Record<string, unknown> }> = [];
 
@@ -41,10 +43,12 @@ export class JudgeAgent {
     config: JudgeConfig,
     geminiApiKey: string,
     cortex: CortexToolExecutor,
+    covalent?: CovalentToolExecutor,
   ) {
     this.config = config;
     this.genai = new GoogleGenAI({ apiKey: geminiApiKey });
     this.cortex = cortex;
+    this.covalent = covalent;
   }
 
   get judgeId(): string {
@@ -172,7 +176,10 @@ export class JudgeAgent {
           systemInstruction: this.config.system_prompt,
           tools: [
             {
-              functionDeclarations: CORTEX_TOOL_DECLARATIONS,
+              functionDeclarations: [
+                ...CORTEX_TOOL_DECLARATIONS,
+                ...COVALENT_TOOL_DECLARATIONS,
+              ],
             },
           ] as Tool[],
         },
@@ -206,7 +213,14 @@ export class JudgeAgent {
             args: fc.functionCall.args,
           };
 
-          const result = await this.cortex.execute(call);
+          let result: Record<string, unknown>;
+          if (isCovalentTool(call.name)) {
+            result = this.covalent
+              ? await this.covalent.execute(call)
+              : { error: "Covalent not configured" };
+          } else {
+            result = await this.cortex.execute(call);
+          }
           this.toolCallLog.push({ call, result });
 
           responseParts.push({

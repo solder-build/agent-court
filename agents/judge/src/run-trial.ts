@@ -9,7 +9,9 @@
 import { writeFileSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
-import { MockCortexToolExecutor } from "./mock-cortex.js";
+import { MockCortexToolExecutor, MockCovalentToolExecutor } from "./mock-cortex.js";
+import { CortexToolExecutor } from "./cortex-tools.js";
+import { CovalentToolExecutor } from "./covalent-tools.js";
 import { JudgeAgent } from "./judge-agent.js";
 import { createAllJudges } from "./judge-prompts.js";
 import { computeConsensus } from "./consensus.js";
@@ -177,12 +179,26 @@ async function main() {
 }
 
 async function runLiveJudges(apiKey: string): Promise<JudgeVerdict[]> {
-  const cortex = new MockCortexToolExecutor();
+  const cortexUrl = process.env.CORTEX_URL;
+  const cortexApiKey = process.env.CORTEX_API_KEY;
+  const cortexLive = !!(cortexUrl && cortexApiKey && cortexApiKey !== "your_cortex_api_key_here");
+  const cortex = cortexLive
+    ? new CortexToolExecutor({ base_url: cortexUrl!, auth_token: cortexApiKey })
+    : new MockCortexToolExecutor();
+  console.log(`[Cortex: ${cortexLive ? "LIVE — " + cortexUrl : "MOCK"}]`);
+
+  const covalentApiKey = process.env.COVALENT_API_KEY;
+  const covalentLive = !!(covalentApiKey && covalentApiKey !== "your_covalent_api_key");
+  const covalent = covalentLive
+    ? new CovalentToolExecutor({ api_key: covalentApiKey! })
+    : new MockCovalentToolExecutor();
+  console.log(`[Covalent: ${covalentLive ? "LIVE" : "MOCK"}]\n`);
+
   const judgeConfigs = createAllJudges("gemini-2.5-flash");
 
-  // Cast MockCortexToolExecutor as any — it has the same execute() interface
+  // Cast mock executors as any — they share the same execute() interface
   const judges = judgeConfigs.map(
-    (jc) => new JudgeAgent(jc, apiKey, cortex as any),
+    (jc) => new JudgeAgent(jc, apiKey, cortex as any, covalent as any),
   );
 
   // Simple answer provider — uses Gemini to simulate disputing agents' responses
